@@ -9,15 +9,9 @@ var expect  = require('chai').expect;
 var remove  = Promise.denodeify(fs.remove);
 var tmp     = require('tmp-sync');
 var path    = require('path');
-<<<<<<< HEAD
-
 var broccoli  = require('broccoli');
-var walkSync  = require('walk-sync');
-var findWhere = require('lodash-node/modern/collections/find');
-=======
 var findWhere = require('lodash/collection/find');
 var MockUI = require('../../helpers/mock-ui');
->>>>>>> origin/stable-1-13
 
 var root    = process.cwd();
 var tmproot = path.join(root, 'tmp');
@@ -510,7 +504,7 @@ describe('models/addon.js', function() {
       });
     });
   });
-  
+
   describe('Addon.lookup', function() {
     it('should throw an error if an addon could not be found', function() {
       var addon = {
