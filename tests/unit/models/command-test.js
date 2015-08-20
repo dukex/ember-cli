@@ -110,7 +110,7 @@ describe('models/command.js', function() {
         host: '0.1.0.1',
         proxy: 'http://iamstef.net/ember-cli',
         liveReload: false,
-        checkForUpdates: false
+        checkForUpdates: true
       },
       args: []
     });
@@ -139,7 +139,7 @@ describe('models/command.js', function() {
         proxy: 'http://iamstef.net/ember-cli',
         liveReload: false,
         port: 80,
-        checkForUpdates: false
+        checkForUpdates: true
       }
     });
   });
@@ -191,8 +191,8 @@ describe('models/command.js', function() {
       analytics: analytics,
       project: { isEmberCLIProject: function(){ return false; }},
       settings: {}
-    }).validateAndRun([]).then(function() {
-      expect(ui.output).to.match(/You have to be inside an ember-cli project/);
+    }).validateAndRun([]).catch(function(reason) {
+      expect(reason.message).to.match(/You have to be inside an ember-cli project/);
     });
   });
 
@@ -202,8 +202,8 @@ describe('models/command.js', function() {
       analytics: analytics,
       project: { isEmberCLIProject: function(){ return true; }},
       settings: {}
-    }).validateAndRun([]).then(function() {
-      expect(ui.output).to.match(/You cannot use.*inside an ember-cli project/);
+    }).validateAndRun([]).catch(function(reason) {
+      expect(reason.message).to.match(/You cannot use.*inside an ember-cli project/);
     });
   });
 

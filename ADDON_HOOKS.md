@@ -49,7 +49,7 @@ Augments the applications configuration settings.  Object returned from this hoo
 Addon.prototype.config = function (env, baseConfig) {
   var configPath = path.join(this.root, 'config', 'environment.js');
 
-  if (fs.existsSync(configPath)) {
+  if (existsSync(configPath)) {
     var configGenerator = require(configPath);
 
     return configGenerator(env, baseConfig);
@@ -85,7 +85,7 @@ Tells the application where your blueprints exist.
 Addon.prototype.blueprintsPath = function() {
   var blueprintPath = path.join(this.root, 'blueprints');
 
-  if (fs.existsSync(blueprintPath)) {
+  if (existsSync(blueprintPath)) {
     return blueprintPath;
   }
 };
@@ -229,7 +229,7 @@ Usually used to import assets into the application.
 
 - `EmberApp` instance [see ember-app.js](https://github.com/ember-cli/ember-cli/blob/v0.1.15/lib/broccoli/ember-app.js)
 
-**Source:** [lib/broccoi/ember-app.js:268](https://github.com/ember-cli/ember-cli/blob/v0.1.15/lib/broccoli/ember-app.js#L268)
+**Source:** [lib/broccoli/ember-app.js:268](https://github.com/ember-cli/ember-cli/blob/v0.1.15/lib/broccoli/ember-app.js#L268)
 
 **Default implementation:** None
 
@@ -245,7 +245,7 @@ Usually used to import assets into the application.
 ```js
 // https://github.com/yapplabs/ember-colpick/blob/master/index.js
 included: function colpick_included(app) {
-  this._super.included(app);
+  this._super.included.apply(this, arguments);
 
   var colpickPath = path.join(app.bowerDirectory, 'colpick');
 
@@ -299,15 +299,40 @@ setupPreprocessorRegistry: function(type, registry) {
 
 - post processing type (eg all)
 - receives tree after build
+- receives tree for a given type after preprocessors (like HTMLBars or babel) run.
+
+available types:
+
+* js
+* template
+* all
+* css
+* test
 
 **Source:** [lib/broccoli/ember-app.js:313](https://github.com/ember-cli/ember-cli/blob/v0.1.15/lib/broccoli/ember-app.js#L313)
 
 **Default implementation:** None
 
+<a name='preprocesstree'></a>
+## preprocessTree
+
+**Received arguments:**
+
+- type of tree (eg template, js)
+- receives tree for a given type before preprocessors (like HTMLBars or babel) run.
+
+available types:
+
+* js
+* template
+* css
+* test
+
+**Default implementation:** None
+
 **Uses:**
 
-- fingerprint assets
-- running processes after build but before toTree
+- removing / adding files from the build.
 
 **Examples:**
 
@@ -375,6 +400,8 @@ Return value is merged with application tree of same type
 **Default implementation:**
 
 ```js
+var mergeTrees = require('broccoli-merge-trees');
+
 Addon.prototype.treeFor = function treeFor(name) {
   this._requireBuildPackages();
 
@@ -389,7 +416,7 @@ Addon.prototype.treeFor = function treeFor(name) {
     trees.push(this.jshintAddonTree());
   }
 
-  return this.mergeTrees(trees.filter(Boolean));
+  return mergeTrees(trees.filter(Boolean));
 };
 ```
 

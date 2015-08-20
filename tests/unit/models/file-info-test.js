@@ -11,6 +11,7 @@ var writeFile = Promise.denodeify(fs.writeFile);
 var root       = process.cwd();
 var tmproot    = path.join(root, 'tmp');
 var tmp        = require('tmp-sync');
+var assign     = require('lodash/object/assign');
 var tmpdir;
 var testOutputPath;
 
@@ -42,6 +43,16 @@ describe('Unit - FileInfo', function(){
     new FileInfo(validOptions);
   });
 
+  it('does not interpolate {{ }} or ${ }', function () {
+    var options = {};
+    assign(options, validOptions, {inputPath:  path.resolve(__dirname,
+      '../../fixtures/file-info/interpolate.txt'), templateVariables: { name: 'tacocat' }});
+    var fileInfo = new FileInfo(options);
+    return fileInfo.render().then(function(output) {
+      expect(output.trim()).to.equal('{{ name }} ${ name }  tacocat tacocat');
+    });
+  });
+
   it('renders an input file', function(){
     validOptions.templateVariables.friend = 'Billy';
     var fileInfo = new FileInfo(validOptions);
@@ -49,6 +60,22 @@ describe('Unit - FileInfo', function(){
     return fileInfo.render().then(function(output){
       expect(output.trim()).to.equal('Howdy Billy',
         'expects the template to have been run');
+    });
+  });
+
+  it('rejects if templating throws', function(){
+    var templateWithUndefinedVariable = path.resolve(__dirname,
+      '../../fixtures/blueprints/with-templating/files/with-undefined-variable.txt');
+    var options = {};
+    assign(options, validOptions, { inputPath: templateWithUndefinedVariable });
+    var fileInfo = new FileInfo(options);
+
+    return fileInfo.render().then(function() {
+      throw new Error('FileInfo.render should reject if templating throws');
+    }).catch(function(e) {
+      if (!e.toString().match(/ReferenceError/)) {
+        throw e;
+      }
     });
   });
 
@@ -77,8 +104,8 @@ describe('Unit - FileInfo', function(){
       expect(output.shift()).to.match(/---/);
       expect(output.shift()).to.match(/\+{3}/);
       expect(output.shift()).to.match(/.*/);
-      expect(output.shift()).to.match(/\+Howdy Billy/);
       expect(output.shift()).to.match(/-Something Old/);
+      expect(output.shift()).to.match(/\+Howdy Billy/);
     });
   });
 

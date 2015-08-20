@@ -2,19 +2,23 @@
 
 var path = require('path');
 var expect = require('chai').expect;
-var assign = require('lodash-node/modern/objects/assign');
+var assign = require('lodash/object/assign');
 var Project = require('../../../lib/models/project');
 var AddonDiscovery = require('../../../lib/models/addon-discovery');
 var fixturePath = path.resolve(__dirname, '../../fixtures/addon');
+var MockUI = require('../../helpers/mock-ui');
+var chalk = require('chalk');
 
 describe('models/addon-discovery.js', function() {
-  var project, projectPath;
+  var project, projectPath, ui;
+  this.timeout(40000);
 
   beforeEach(function() {
+    ui = new MockUI();
     projectPath = path.resolve(fixturePath, 'simple');
     var packageContents = require(path.join(projectPath, 'package.json'));
 
-    project = new Project(projectPath, packageContents);
+    project = new Project(projectPath, packageContents, ui);
   });
 
   describe('dependencies', function() {
@@ -38,14 +42,14 @@ describe('models/addon-discovery.js', function() {
 
     it('returns an object containing depenencies from the provided package.json', function() {
       var expected = assign({}, deps, devDeps);
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       expect(discovery.dependencies(mockPkg)).to.be.eql(expected);
     });
 
     it('excludes development dependencies if instructed', function() {
       var expected = assign({}, deps);
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       expect(discovery.dependencies(mockPkg, true)).to.be.eql(expected);
     });
@@ -60,7 +64,7 @@ describe('models/addon-discovery.js', function() {
         }
       };
 
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(path) {
         actualPaths.push(path);
@@ -77,7 +81,7 @@ describe('models/addon-discovery.js', function() {
       var discovery, pkg;
 
       beforeEach(function() {
-        discovery = new AddonDiscovery();
+        discovery = new AddonDiscovery(ui);
       });
 
       it('returns empty array if `ember-addon` is not present in provided package', function() {
@@ -115,7 +119,7 @@ describe('models/addon-discovery.js', function() {
           paths: [ 'lib/foo', 'baz/qux' ]
         }
       };
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(providedPath) {
         actualPaths.push(providedPath);
@@ -140,7 +144,7 @@ describe('models/addon-discovery.js', function() {
           paths: [ 'lib/foo', 'baz/qux' ]
         }
       };
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(providedPath) {
         actualPaths.push(providedPath);
@@ -179,10 +183,39 @@ describe('models/addon-discovery.js', function() {
       };
     });
 
+    it('can find a package without a main entry point [DEPRECATED]', function() {
+      var root = path.join(fixturePath, 'shared-package', 'base');
+      var addonNodeModulesPath = path.join(root, 'node_modules');
+      var actualPaths = [];
+      var discovery = new AddonDiscovery(ui);
+
+      deps['invalid-package'] = 'latest';
+      discovery.discoverAtPath = function(providedPath) {
+        actualPaths.push(providedPath);
+
+        return providedPath;
+      };
+
+      discovery.discoverFromDependencies(root, addonNodeModulesPath, mockPkg, true);
+
+      var expectedPaths = [
+        path.join(root, 'node_modules', 'foo-bar'),
+        path.join(root, 'node_modules', 'blah-blah'),
+        path.join(root, 'node_modules', 'invalid-package')
+      ];
+
+      expect(actualPaths).to.be.eql(expectedPaths);
+
+      var output = ui.output.trim();
+      var expectedWarning = chalk.yellow('The package `invalid-package` is not a properly formatted package, we have used a fallback lookup to resolve it at `' + path.join(root, 'node_modules', 'invalid-package') + '`. This is generally caused by an addon not having a `main` entry point (or `index.js`).');
+      expect(output).to.equal(expectedWarning);
+    });
+
     it('does not error when dependencies are not found', function() {
       var root = path.join(fixturePath, 'shared-package', 'base');
+      var addonNodeModulesPath = path.join(root, 'node_modules');
       var actualPaths = [];
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       deps['blah-zorz'] = 'latest';
       discovery.discoverAtPath = function(providedPath) {
@@ -191,11 +224,12 @@ describe('models/addon-discovery.js', function() {
         return providedPath;
       };
 
-      discovery.discoverFromDependencies(root, mockPkg, true);
+      discovery.discoverFromDependencies(root, addonNodeModulesPath, mockPkg, true);
 
       var expectedPaths = [
         path.join(root, 'node_modules', 'foo-bar'),
-        path.join(root, 'node_modules', 'blah-blah')
+        path.join(root, 'node_modules', 'blah-blah'),
+        path.join(root, 'node_modules', 'blah-zorz')
       ];
 
       expect(actualPaths).to.be.eql(expectedPaths);
@@ -203,8 +237,9 @@ describe('models/addon-discovery.js', function() {
 
     it('calls discoverAtPath for each entry in dependencies', function() {
       var root = path.join(fixturePath, 'shared-package', 'base');
+      var addonNodeModulesPath = path.join(root, 'node_modules');
       var actualPaths = [];
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(providedPath) {
         actualPaths.push(providedPath);
@@ -212,7 +247,7 @@ describe('models/addon-discovery.js', function() {
         return providedPath;
       };
 
-      discovery.discoverFromDependencies(root, mockPkg);
+      discovery.discoverFromDependencies(root, addonNodeModulesPath, mockPkg);
 
       var expectedPaths = [
         path.join(root, '..', 'node_modules', 'dev-foo-bar'),
@@ -225,8 +260,9 @@ describe('models/addon-discovery.js', function() {
 
     it('excludes devDeps if `excludeDevDeps` is true', function() {
       var root = path.join(fixturePath, 'shared-package', 'base');
+      var addonNodeModulesPath = path.join(root, 'node_modules');
       var actualPaths = [];
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(providedPath) {
         actualPaths.push(providedPath);
@@ -234,7 +270,7 @@ describe('models/addon-discovery.js', function() {
         return providedPath;
       };
 
-      discovery.discoverFromDependencies(root, mockPkg, true);
+      discovery.discoverFromDependencies(root, addonNodeModulesPath, mockPkg, true);
 
       var expectedPaths = [
         path.join(root, 'node_modules', 'foo-bar'),
@@ -253,7 +289,7 @@ describe('models/addon-discovery.js', function() {
         }
       };
 
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
       var actual = discovery.discoverFromProjectItself(project);
 
       expect(actual).to.be.eql([]);
@@ -268,7 +304,7 @@ describe('models/addon-discovery.js', function() {
         }
       };
 
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       discovery.discoverAtPath = function(providedPath) {
         actualPaths.push(providedPath);
@@ -301,7 +337,7 @@ describe('models/addon-discovery.js', function() {
         }
       };
 
-      discovery = new AddonDiscovery();
+      discovery = new AddonDiscovery(ui);
 
       discovery.discoverFromDependencies = function() {
         discoverFromDependenciesCalled = true;
@@ -352,10 +388,13 @@ describe('models/addon-discovery.js', function() {
           devDependencies: {
             'dev-dep-bar': 'latest'
           }
+        },
+        hasDependencies: function() {
+          return true;
         }
       };
 
-      discovery = new AddonDiscovery();
+      discovery = new AddonDiscovery(ui);
 
       discovery.discoverFromProjectItself = function() {
         discoverFromProjectItselfCalled = true;
@@ -402,7 +441,7 @@ describe('models/addon-discovery.js', function() {
     it('returns an info object when addon is found', function() {
       var addonPath = path.join(fixturePath, 'simple/node_modules/ember-random-addon');
       var addonPkg = require(path.join(addonPath, 'package.json'));
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       var result = discovery.discoverAtPath(addonPath);
 
@@ -413,7 +452,7 @@ describe('models/addon-discovery.js', function() {
 
     it('returns `null` if path is not for an addon', function() {
       var addonPath = path.join(fixturePath, 'simple');
-      var discovery = new AddonDiscovery();
+      var discovery = new AddonDiscovery(ui);
 
       var result = discovery.discoverAtPath(addonPath);
 

@@ -4,7 +4,7 @@ var RSVP           = require('rsvp');
 var Promise        = require('../../lib/ext/promise');
 var chalk          = require('chalk');
 var spawn          = require('child_process').spawn;
-var defaults       = require('lodash-node/modern/objects/defaults');
+var defaults       = require('lodash/object/defaults');
 var killCliProcess = require('./kill-cli-process');
 
 module.exports = function run(/* command, args, options */) {
@@ -29,7 +29,7 @@ module.exports = function run(/* command, args, options */) {
   });
 
   return new RSVP.Promise(function(resolve, reject) {
-    console.log('      Running: ' + command + ' ' + args.join(' '));
+    console.log('      Running: ' + command + ' ' + args.join(' ') + ' in: ' + process.cwd());
 
     var opts = {};
     if (process.platform === 'win32') {

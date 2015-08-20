@@ -4,17 +4,11 @@ var MockUI        = require('./mock-ui');
 var MockAnalytics = require('./mock-analytics');
 var Cli           = require('../../lib/cli');
 
-var baseArgs = ['node', 'path/to/cli'];
-
 module.exports = function ember(args) {
-  var argv, cli;
+  var cli;
 
-  if (args) {
-    argv = baseArgs.slice().concat(args);
-  } else {
-    argv = baseArgs;
-  }
-
+  args.push('--disable-analytics');
+  args.push('--watcher=node');
   cli = new Cli({
     inputStream:  [],
     outputStream: [],

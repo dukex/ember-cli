@@ -13,10 +13,11 @@ var request           = require('supertest');
 var net               = require('net');
 var EOL               = require('os').EOL;
 var nock              = require('nock');
-
+var express           = require('express');
 
 describe('express-server', function() {
   var subject, ui, project, proxy, nockProxy;
+  nock.enableNetConnect();
 
   beforeEach(function() {
     this.timeout(10000);
@@ -46,6 +47,16 @@ describe('express-server', function() {
     } catch(err) { }
   });
 
+  describe('displayHost', function() {
+    it('should use the specified host if not 0.0.0.0', function() {
+      expect(subject.displayHost('1.2.3.4')).to.equal('1.2.3.4');
+    });
+
+    it('should use the use localhost if specified host is 0.0.0.0', function() {
+      expect(subject.displayHost('0.0.0.0')).to.equal('localhost');
+    });
+  });
+
   describe('processAppMiddlewares', function() {
     it('has a good error message if a file exists, but does not export a function', function() {
       subject.project = {
@@ -71,6 +82,22 @@ describe('express-server', function() {
   });
 
   describe('output', function() {
+    this.timeout(40000);
+
+    it('with ssl', function() {
+      return subject.start({
+        host:  '0.0.0.0',
+        port: '1337',
+        ssl: true,
+        sslCert: 'tests/fixtures/ssl/server.crt',
+        sslKey: 'tests/fixtures/ssl/server.key',
+        baseURL: '/'
+      }).then(function() {
+        var output = ui.output.trim().split(EOL);
+        expect(output[0]).to.equal('Serving on https://localhost:1337/');
+      });
+    });
+
     it('with proxy', function() {
       return subject.start({
         proxy: 'http://localhost:3001/',
@@ -79,7 +106,7 @@ describe('express-server', function() {
         baseURL: '/'
       }).then(function() {
         var output = ui.output.trim().split(EOL);
-        expect(output[1]).to.equal('Serving on http://0.0.0.0:1337/');
+        expect(output[1]).to.equal('Serving on http://localhost:1337/');
         expect(output[0]).to.equal('Proxying to http://localhost:3001/');
         expect(output.length).to.equal(2, 'expected only two lines of output');
       });
@@ -92,7 +119,7 @@ describe('express-server', function() {
         baseURL: '/'
       }).then(function() {
         var output = ui.output.trim().split(EOL);
-        expect(output[0]).to.equal('Serving on http://0.0.0.0:1337/');
+        expect(output[0]).to.equal('Serving on http://localhost:1337/');
         expect(output.length).to.equal(1, 'expected only one line of output');
       });
     });
@@ -104,12 +131,12 @@ describe('express-server', function() {
         baseURL: '/foo'
       }).then(function() {
         var output = ui.output.trim().split(EOL);
-        expect(output[0]).to.equal('Serving on http://0.0.0.0:1337/foo/');
+        expect(output[0]).to.equal('Serving on http://localhost:1337/foo/');
         expect(output.length).to.equal(1, 'expected only one line of output');
       });
     });
 
-    it('address in use', function(done) {
+    it('address in use', function() {
       var preexistingServer = net.createServer();
       preexistingServer.listen(1337);
 
@@ -121,15 +148,39 @@ describe('express-server', function() {
           expect(false, 'should have rejected');
         })
         .catch(function(reason) {
-          expect(reason).to.equal('Could not serve on http://0.0.0.0:1337. It is either in use or you do not have permission.');
+          expect(reason.message).to.equal('Could not serve on http://localhost:1337. It is either in use or you do not have permission.');
         })
         .finally(function() {
-          preexistingServer.close(done);
+          preexistingServer.close();
         });
     });
   });
 
   describe('behaviour', function() {
+    it('starts with ssl if ssl option is passed', function() {
+
+      return subject.start({
+        host:  'localhost',
+        port: '1337',
+        ssl: true,
+        sslCert: 'tests/fixtures/ssl/server.crt',
+        sslKey: 'tests/fixtures/ssl/server.key',
+        baseURL: '/'
+      })
+        .then(function() {
+          return new Promise(function(resolve, reject) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+            request('https://localhost:1337', {strictSSL: false}).
+              get('/').expect(200, function(err, value) {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+                if(err) { reject(err);    }
+                else    { resolve(value); }
+              });
+          });
+        });
+    }),
+
+
     it('app middlewares are processed before the proxy', function(done) {
       var expected = '/foo was hit';
 
@@ -163,7 +214,39 @@ describe('express-server', function() {
             });
         });
     });
+    it('works with a regular express app', function(done) {
+      var expected = '/foo was hit';
 
+      project.require = function() {
+        var app = express();
+        app.use('/foo', function(req,res) {
+          res.send(expected);
+        });
+        return app;
+      };
+
+      subject.start({
+        proxy: 'http://localhost:3001/',
+        host:  '0.0.0.0',
+        port: '1337',
+        baseURL: '/'
+      })
+        .then(function() {
+          request(subject.app)
+            .get('/foo')
+            .set('accept', 'application/json, */*')
+            .expect(function(res) {
+              expect(res.text).to.equal(expected);
+            })
+            .end(function(err) {
+              if (err) {
+                return done(err);
+              }
+              expect(proxy.called).to.equal(false);
+              done();
+            });
+        });
+    });
     describe('with proxy', function() {
       beforeEach(function() {
         return subject.start({
@@ -461,6 +544,29 @@ describe('express-server', function() {
       });
 
       it('serves index.html when file not found (with baseURL) with auto/history location', function(done) {
+        return startServer('/foo')
+          .then(function() {
+            request(subject.app)
+              .get('/foo/someurl')
+              .set('accept', 'text/html')
+              .expect(200)
+              .expect('Content-Type', /html/)
+              .end(function(err) {
+                if (err) {
+                  return done(err);
+                }
+                done();
+              });
+          });
+      });
+
+      it('serves index.html when file not found (with baseURL) with custom history location', function(done) {
+        project._config = {
+          baseURL: '/',
+          locationType: 'blahr',
+          historySupportMiddleware: true
+        };
+
         return startServer('/foo')
           .then(function() {
             request(subject.app)

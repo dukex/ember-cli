@@ -7,30 +7,28 @@ init:
 # Test against these versions of Node.js.
 environment:
   matrix:
-    - nodejs_version: "0.10"
+    - nodejs_version: "0.12"
 
 # Install scripts. (runs after repo cloning)
 install:
+  - git rev-parse HEAD
   # Get the latest stable version of Node 0.STABLE.latest
   - ps: Install-Product node $env:nodejs_version
   # Install PhantomJS
-  - cinst PhantomJS -Version 1.9.8
-  - set path=%path%;C:\tools\PhantomJS\
-  - dir C:\tools\PhantomJS
+  - cinst PhantomJS -y
+  # hide python so node-gyp won't try to build native extentions
+  - rename C:\Python27 Python27hidden
   # Typical npm stuff.
   - md C:\nc
-  - npm install -g npm@^2
-  # Workaround https://github.com/npm/npm/wiki/Troubleshooting#upgrading-on-windows
-  - set PATH=%APPDATA%\npm;%PATH%
   - npm config set cache C:\nc
   - npm version
-  - npm install
+  - npm install --no-optional
 
 # Post-install test scripts.
 test_script:
   # Output useful info for debugging.
   - npm version
-  - cmd: npm run-script test-all
+  - cmd: npm run test-all
 
 # Don't actually build.
 build: off

@@ -1,6 +1,8 @@
+/*jshint node:true*/
+
 var Blueprint  = require('../../lib/models/blueprint');
 var Promise    = require('../../lib/ext/promise');
-var merge      = require('lodash-node/compat/objects/merge');
+var merge      = require('lodash/object/merge');
 var inflection = require('inflection');
 
 module.exports = {
@@ -46,13 +48,15 @@ module.exports = {
   },
 
   _process: function(type, options) {
+    var entityName = options.entity.name;
+
     var modelOptions = merge({}, options, {
       entity: {
-        name: inflection.singularize(options.entity.name)
+        name: entityName ? inflection.singularize(entityName) : ''
       }
     });
 
-    var routeOptions = merge({}, options, { type: 'resource' });
+    var routeOptions = merge({}, options);
 
     var self = this;
     return this._processBlueprint(type, 'model', modelOptions)

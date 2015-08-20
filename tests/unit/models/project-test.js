@@ -7,14 +7,20 @@ var stub    = require('../../helpers/stub').stub;
 var tmp     = require('../../helpers/tmp');
 var touch   = require('../../helpers/file-utils').touch;
 var expect  = require('chai').expect;
+var MockUI = require('../../helpers/mock-ui');
 
-var emberCLIVersion = require('../../../lib/utilities/ember-cli-version');
+var versionUtils = require('../../../lib/utilities/version-utils');
+var emberCLIVersion = versionUtils.emberCLIVersion;
 
 describe('models/project.js', function() {
   var project, projectPath;
 
+  afterEach(function() {
+    if (project) { project = null; }
+  });
+
   describe('Project.prototype.config', function() {
-    var called      = false;
+    var called;
 
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
@@ -25,7 +31,7 @@ describe('models/project.js', function() {
             baseURL: '/foo/bar'
           });
 
-          project = new Project(projectPath, { });
+          project = new Project(projectPath, { }, new MockUI());
           project.require = function() {
             called = true;
             return function() {};
@@ -34,6 +40,7 @@ describe('models/project.js', function() {
     });
 
     afterEach(function() {
+      called = null;
       return tmp.teardown(projectPath);
     });
 
@@ -142,7 +149,7 @@ describe('models/project.js', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
     });
 
@@ -260,12 +267,12 @@ describe('models/project.js', function() {
       expect(project.blueprintLookupPaths()).to.deep.equal(expected);
     });
 
-    it('returns an empty list of blueprint paths if outside a project', function() {
+    it('does not include blueprint path relative to root if outside a project', function() {
       project.isEmberCLIProject = function() {
         return false;
       };
 
-      expect(project.blueprintLookupPaths()).to.deep.equal([]);
+      expect(project.blueprintLookupPaths()).to.deep.equal(project.addonBlueprintLookupPaths());
     });
 
     it('returns an instance of an addon with an object export', function() {
@@ -297,7 +304,7 @@ describe('models/project.js', function() {
       projectPath         = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
 
       stub(Project.prototype, 'initializeAddons');
@@ -330,7 +337,7 @@ describe('models/project.js', function() {
       projectPath         = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
 
       newProjectPath = path.resolve(__dirname, '../../fixtures/addon/env-addons');
@@ -347,8 +354,36 @@ describe('models/project.js', function() {
   });
 
   describe('emberCLIVersion', function() {
+    beforeEach(function() {
+      projectPath = process.cwd() + '/tmp/test-app';
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
     it('should return the same value as the utlity function', function() {
       expect(project.emberCLIVersion()).to.equal(emberCLIVersion());
+    });
+  });
+
+  describe('isEmberCLIProject', function() {
+    beforeEach(function() {
+      projectPath = process.cwd() + '/tmp/test-app';
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
+    it('returns false when `ember-cli` is not a dependency', function(){
+      expect(project.isEmberCLIProject()).to.equal(false);
+    });
+
+    it('returns true when `ember-cli` is a devDependency', function(){
+      project.pkg.devDependencies = {'ember-cli': '*'};
+
+      expect(project.isEmberCLIProject()).to.equal(true);
+    });
+
+    it('returns true when `ember-cli` is a dependency', function(){
+      project.pkg.dependencies = {'ember-cli': '*'};
+
+      expect(project.isEmberCLIProject()).to.equal(true);
     });
   });
 
@@ -356,7 +391,7 @@ describe('models/project.js', function() {
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
 
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       project.initializeAddons();
     });
 
@@ -381,7 +416,7 @@ describe('models/project.js', function() {
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
 
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
 
       stub(Project.prototype, 'initializeAddons');
 
@@ -427,32 +462,69 @@ describe('models/project.js', function() {
   });
 
   describe('bowerDirectory', function() {
+    beforeEach(function() {
+      projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
     it('should be initialized in constructor', function() {
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should be set to directory property in .bowerrc', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/bowerrc-with-directory');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('vendor');
     });
 
     it('should default to ‘bower_components’ unless directory property is set in .bowerrc', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/bowerrc-without-directory');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should default to ‘bower_components’ if .bowerrc is not present', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/no-bowerrc');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should default to ‘bower_components’ if .bowerrc json is invalid', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/invalid-bowerrc');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
+    });
+  });
+
+  describe('nodeModulesPath', function() {
+    function makeProject() {
+      projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
+      project = new Project(projectPath, {}, new MockUI());
+    }
+
+    afterEach(function() {
+      delete process.env.EMBER_NODE_PATH;
+    });
+
+    it('should equal env.EMBER_NODE_PATH when it is set', function() {
+      var nodePath = '/my/path/node_modules';
+      process.env.EMBER_NODE_PATH = nodePath;
+
+      makeProject();
+
+      expect(project.nodeModulesPath).to.equal(path.resolve(nodePath));
+    });
+
+    it('should equal project.root joined with "node_modules" when EMBER_NODE_PATH is not set', function() {
+      makeProject();
+
+      expect(project.nodeModulesPath).to.equal(path.join(projectPath, 'node_modules'));
+    });
+  });
+
+  describe('.nullProject', function (){
+    it('is a singleton', function() {
+      expect(Project.nullProject()).to.equal(Project.nullProject());
     });
   });
 });
