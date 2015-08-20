@@ -18,6 +18,7 @@ var tmproot          = path.join(root, 'tmp');
 var EOL              = require('os').EOL;
 var BlueprintNpmTask = require('../helpers/disable-npm-on-blueprint');
 var expect           = require('chai').expect;
+var MockUI             = require('../helpers/mock-ui');
 
 describe('Acceptance: ember generate', function() {
   this.timeout(10000);
@@ -107,10 +108,12 @@ describe('Acceptance: ember generate', function() {
       assertFile('app/templates/components/x-foo.hbs', {
         contains: "{{yield}}"
       });
-      assertFile('tests/unit/components/x-foo-test.js', {
+      assertFile('tests/integration/components/x-foo-test.js', {
         contains: [
           "import { moduleForComponent, test } from 'ember-qunit';",
-          "moduleForComponent('x-foo'"
+          "import hbs from 'htmlbars-inline-precompile';",
+          "moduleForComponent('x-foo'",
+          "integration: true"
         ]
       });
     });
@@ -128,10 +131,12 @@ describe('Acceptance: ember generate', function() {
       assertFile('app/templates/components/foo/x-foo.hbs', {
         contains: "{{yield}}"
       });
-      assertFile('tests/unit/components/foo/x-foo-test.js', {
+      assertFile('tests/integration/components/foo/x-foo-test.js', {
         contains: [
           "import { moduleForComponent, test } from 'ember-qunit';",
-          "moduleForComponent('foo/x-foo'"
+          "import hbs from 'htmlbars-inline-precompile';",
+          "moduleForComponent('foo/x-foo'",
+          "integration: true"
         ]
       });
     });
@@ -149,10 +154,37 @@ describe('Acceptance: ember generate', function() {
       assertFile('app/templates/components/x-foo.hbs', {
         contains: "{{yield}}"
       });
+      assertFile('tests/integration/components/x-foo-test.js', {
+        contains: [
+          "import { moduleForComponent, test } from 'ember-qunit';",
+          "import hbs from 'htmlbars-inline-precompile';",
+          "moduleForComponent('x-foo'",
+          "integration: true"
+        ]
+      });
+    });
+  });
+
+  it('component-test x-foo', function() {
+    return generate(['component-test', 'x-foo']).then(function() {
+      assertFile('tests/integration/components/x-foo-test.js', {
+        contains: [
+          "import { moduleForComponent, test } from 'ember-qunit';",
+          "import hbs from 'htmlbars-inline-precompile';",
+          "moduleForComponent('x-foo'",
+          "integration: true"
+        ]
+      });
+    });
+  });
+  
+  it('component-test x-foo --unit', function() {
+    return generate(['component-test', 'x-foo', '--unit']).then(function() {
       assertFile('tests/unit/components/x-foo-test.js', {
         contains: [
           "import { moduleForComponent, test } from 'ember-qunit';",
-          "moduleForComponent('x-foo'"
+          "moduleForComponent('x-foo'",
+          "unit: true"
         ]
       });
     });
@@ -165,7 +197,7 @@ describe('Acceptance: ember generate', function() {
                   "export function fooBar(params/*, hash*/) {" + EOL +
                   "  return params;" + EOL +
                   "}" +  EOL + EOL +
-                  "export default Ember.HTMLBars.makeBoundHelper(fooBar);"
+                  "export default Ember.Helper.helper(fooBar);"
       });
       assertFile('tests/unit/helpers/foo-bar-test.js', {
         contains: "import { fooBar } from '../../../helpers/foo-bar';"
@@ -180,7 +212,7 @@ describe('Acceptance: ember generate', function() {
                   "export function fooBarBaz(params/*, hash*/) {" + EOL +
                   "  return params;" + EOL +
                   "}" + EOL + EOL +
-                  "export default Ember.HTMLBars.makeBoundHelper(fooBarBaz);"
+                  "export default Ember.Helper.helper(fooBarBaz);"
       });
       assertFile('tests/unit/helpers/foo/bar-baz-test.js', {
         contains: "import { fooBarBaz } from '../../../../helpers/foo/bar-baz';"
@@ -316,6 +348,29 @@ describe('Acceptance: ember generate', function() {
     });
   });
 
+    it('route foo with --skip-router', function() {
+    return generate(['route', 'foo', '--skip-router']).then(function() {
+      assertFile('app/router.js', {
+        doesNotContain: 'this.route(\'foo\')'
+      });
+      assertFile('app/routes/foo.js', {
+        contains: [
+          "import Ember from 'ember';",
+          "export default Ember.Route.extend({" + EOL + "});"
+        ]
+      });
+      assertFile('app/templates/foo.hbs', {
+        contains: '{{outlet}}'
+      });
+      assertFile('tests/unit/routes/foo-test.js', {
+        contains: [
+          "import { moduleFor, test } from 'ember-qunit';",
+          "moduleFor('route:foo'"
+        ]
+      });
+    });
+  });
+
   it('route foo with --path', function() {
     return generate(['route', 'foo', '--path=:foo_id/show']).then(function() {
       assertFile('app/router.js', {
@@ -431,6 +486,19 @@ describe('Acceptance: ember generate', function() {
     });
   });
 
+  it('resource without entity name does not throw exception', function() {
+
+    var restoreWriteError = MockUI.prototype.writeError;
+    MockUI.prototype.writeError = function(error) {
+      expect(error.message).to.equal('The `ember generate` command requires an entity name to be specified. For more details, use `ember help`.');
+    };
+
+    return generate(['resource']).then(function() {
+      MockUI.prototype.writeError = restoreWriteError;
+    });
+
+  });
+
   it('resource foos with --path', function() {
     return generate(['resource', 'foos', '--path=app/foos']).then(function() {
       assertFile('app/router.js', {
@@ -458,6 +526,20 @@ describe('Acceptance: ember generate', function() {
 
       assertFile('tests/unit/initializers/foo-test.js', {
         contains: "import { initialize } from '../../../initializers/foo';"
+      });
+    });
+  });
+
+  it('initializer-test foo', function() {
+    return generate(['initializer-test', 'foo']).then(function() {
+      assertFile('tests/unit/initializers/foo-test.js', {
+        contains: [
+          "import { initialize } from '../../../initializers/foo';",
+          "module('Unit | Initializer | foo'",
+          "var registry, application;",
+          "registry = application.registry;",
+          "initialize(registry, application);"
+        ]
       });
     });
   });

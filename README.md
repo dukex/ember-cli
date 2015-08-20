@@ -21,7 +21,7 @@ Supports node 0.12.x and npm 2.6.x.
 
 
 ## Project Elements
-Additional components of this project which are used at runtime in your application:
+Additional components of this project that are used at runtime in your application:
 * [ember-resolver](https://github.com/ember-cli/ember-resolver)
 * [loader](https://github.com/ember-cli/loader.js)
 * [ember-cli-shims](https://github.com/ember-cli/ember-cli-shims)
@@ -55,7 +55,7 @@ Please read the official [npm-link documentation](https://www.npmjs.org/doc/cli/
 
 ### Working with the tests
 
-Use `npm test` to run the tests after every file change (Runs only fast tests). Use `npm test` to run them once.
+Use `npm test` to run the tests (Runs only fast tests).
 
 For a full test run which includes some very slow acceptance tests,
 please run: `npm run test-all`. Please note, this is what travis
